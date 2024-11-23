@@ -21,6 +21,19 @@ config = {
     'current_voice_client': None
 }
 
+def convert_mentions_to_names(text, message):
+    for mention in message.mentions:
+        text = text.replace(f'<@{mention.id}>', mention.display_name)
+        text = text.replace(f'<@!{mention.id}>', mention.display_name)
+
+    for role in message.role_mentions:
+        text = text.repalce(f'<@&{role.id}>', role.name)
+
+    for channel in message.channel_mentions:
+        text = text.replace(f'<#{channel.id}>', f'#{channel.name}')
+
+    return text
+
 def generate_elevenlabs_tts(text, voice_id):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
@@ -60,7 +73,8 @@ async def leave(ctx):
         config['current_voice_client'] = None
         await ctx.send('Left voice channel')
 
-def clean_text(text):
+def clean_text(text, message):
+    text = convert_mentions_to_names(text, message)
     text_without_urls = re.sub(r'https?://\S+', '', text)
     return re.sub(r'<:([^:]+):\d+>', r'\1', text_without_urls).strip()
 
@@ -98,7 +112,7 @@ async def on_message(message):
                 if not await ensure_voice_connection(message):
                     return
                 
-                clean_content = clean_text(message.content)
+                clean_content = clean_text(message.content, message)
                 print(f"TTS Message: {message.author.name}: {clean_content}")
                 
                 audio_content = generate_elevenlabs_tts(clean_content, voice_id)
