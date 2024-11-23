@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 bot_key = os.getenv('BOT_KEY')
 elevenlabs_key = os.getenv('API_KEY')
-user_id = os.getenv('USER_ID')
+voice_id = "0dPqNXnhg2bmxQv1WKDp"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -17,12 +17,12 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 config = {
-    'target_user_id': 148749538373402634,
+    'target_user_id': 343414109213294594,
     'current_voice_client': None
 }
 
-def generate_elevenlabs_tts(text, user_id):
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{user_id}"
+def generate_elevenlabs_tts(text, voice_id):
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     headers = {
         "Content-Type": "application/json",
         "xi-api-key": elevenlabs_key
@@ -61,8 +61,29 @@ async def leave(ctx):
         await ctx.send('Left voice channel')
 
 def clean_text(text):
-   text_without_urls = re.sub(r'https?://\S+', '', text)
-   return re.sub(r'<:([^:]+):\d+>', r'\1', text_without_urls).strip()
+    text_without_urls = re.sub(r'https?://\S+', '', text)
+    return re.sub(r'<:([^:]+):\d+>', r'\1', text_without_urls).strip()
+
+async def ensure_voice_connection(message):
+    """Ensure the bot is connected to the correct voice channel"""
+    if not message.author.voice:
+        return False
+        
+    target_channel = message.author.voice.channel
+    
+    # If we're not connected at all
+    if not config['current_voice_client']:
+        config['current_voice_client'] = await target_channel.connect()
+        return True
+        
+    # If we're connected but in the wrong channel
+    if config['current_voice_client'].channel != target_channel:
+        await config['current_voice_client'].disconnect()
+        config['current_voice_client'] = await target_channel.connect()
+        return True
+        
+    # If we're already in the correct channel
+    return True
 
 @bot.event
 async def on_message(message):
@@ -73,29 +94,23 @@ async def on_message(message):
         
         if not message.content.startswith('!') and message.content.strip():
             try:
-                # Check if the user is in a voice channel
-                if message.author.voice and message.author.voice.channel:
-                    # Disconnect existing voice client if connected to a different channel
-                    if config['current_voice_client']:
-                        await config['current_voice_client'].disconnect()
-                    
-                    # Connect to the user's current voice channel
-                    config['current_voice_client'] = await message.author.voice.channel.connect()
+                # Ensure proper voice connection
+                if not await ensure_voice_connection(message):
+                    return
                 
                 clean_content = clean_text(message.content)
-                
                 print(f"TTS Message: {message.author.name}: {clean_content}")
                 
-                audio_content = generate_elevenlabs_tts(clean_content, user_id)
+                audio_content = generate_elevenlabs_tts(clean_content, voice_id)
                 if audio_content:
                     # Creating a temp file in memory
                     audio_source = discord.FFmpegPCMAudio(BytesIO(audio_content), pipe=True)
                     
                     # Play audio
-                    config['current_voice_client'].play(audio_source)
+                    if not config['current_voice_client'].is_playing():
+                        config['current_voice_client'].play(audio_source)
                 
             except Exception as e:
                 print(f"Error playing TTS: {e}")
 
 bot.run(bot_key)
-
