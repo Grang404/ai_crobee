@@ -14,6 +14,7 @@ voice_id = "0dPqNXnhg2bmxQv1WKDp"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.voice_states = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 config = {
@@ -21,6 +22,7 @@ config = {
     'current_voice_client': None
 }
 
+# filters custom emojis, @ tags, and urls
 def convert_mentions_to_names(text, message):
     for mention in message.mentions:
         text = text.replace(f'<@{mention.id}>', mention.display_name)
@@ -33,6 +35,11 @@ def convert_mentions_to_names(text, message):
         text = text.replace(f'<#{channel.id}>', f'#{channel.name}')
 
     return text
+
+def clean_text(text, message):
+    text = convert_mentions_to_names(text, message)
+    text_without_urls = re.sub(r'https?://\S+', '', text)
+    return re.sub(r'<:([^:]+):\d+>', r'\1', text_without_urls).strip()
 
 def generate_elevenlabs_tts(text, voice_id):
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -57,6 +64,8 @@ def generate_elevenlabs_tts(text, voice_id):
         print(f"TTS Generation Error: {response.text}")
         return False
 
+# Bot comands and events uwu 
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
@@ -72,11 +81,6 @@ async def leave(ctx):
         await config['current_voice_client'].disconnect()
         config['current_voice_client'] = None
         await ctx.send('Left voice channel')
-
-def clean_text(text, message):
-    text = convert_mentions_to_names(text, message)
-    text_without_urls = re.sub(r'https?://\S+', '', text)
-    return re.sub(r'<:([^:]+):\d+>', r'\1', text_without_urls).strip()
 
 async def ensure_voice_connection(message):
     """Ensure the bot is connected to the correct voice channel"""
@@ -98,6 +102,18 @@ async def ensure_voice_connection(message):
         
     # If we're already in the correct channel
     return True
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Handle voice state changes"""
+    # Only care about the target user completely leaving voice
+    if (member.id == config['target_user_id'] and 
+        before.channel and
+        not after.channel):
+        if config['current_voice_client']:
+            await config['current_voice_client'].disconnect()
+            config['current_voice_client'] = None
+            print(f"Disconnected because {member.name} left voice")
 
 @bot.event
 async def on_message(message):
