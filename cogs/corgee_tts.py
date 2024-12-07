@@ -11,7 +11,7 @@ class AzureTTSListener(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = {
-            "target_user_id": 148749538373402634,
+            "target_user_id": 343414109213294594,
             "current_voice_client": None,
         }
         # Load Azure credentials from environment
