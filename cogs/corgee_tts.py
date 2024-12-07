@@ -10,7 +10,7 @@ class TTSListener(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = {
-            "target_user_id": 148749538373402634,
+            "target_user_id": 343414109213294594,
             "current_voice_client": None,
         }
         self.voice_id = "0dPqNXnhg2bmxQv1WKDp"
@@ -57,23 +57,33 @@ class TTSListener(commands.Cog):
     async def ensure_voice_connection(self, message):
         """Ensure the bot is connected to the correct voice channel"""
         if not message.author.voice:
+            print("Author not in a voice channel")
             return False
 
         target_channel = message.author.voice.channel
 
-        # If we're not connected at all
-        if not self.config["current_voice_client"]:
-            self.config["current_voice_client"] = await target_channel.connect()
-            return True
+        try:
+            # If we're not connected at all
+            if not self.config["current_voice_client"]:
+                self.config["current_voice_client"] = await target_channel.connect()
+                return True
 
-        # If we're connected but in the wrong channel
-        if self.config["current_voice_client"].channel != target_channel:
-            await self.config["current_voice_client"].disconnect()
-            self.config["current_voice_client"] = await target_channel.connect()
-            return True
+            # If we're connected but in the wrong channel
+            if self.config["current_voice_client"].channel != target_channel:
+                await self.config["current_voice_client"].disconnect()
+                self.config["current_voice_client"] = await target_channel.connect()
+                return True
 
-        # If we're already in the correct channel
-        return True
+            # Verify the connection is still valid
+            if not self.config["current_voice_client"].is_connected():
+                self.config["current_voice_client"] = await target_channel.connect()
+                return True
+
+            # If we're already in the correct channel
+            return True
+        except Exception as e:
+            print(f"Voice connection error: {e}")
+            return False
 
     @commands.command()
     async def set_target(self, ctx, user: discord.Member):
@@ -110,7 +120,11 @@ class TTSListener(commands.Cog):
             if not message.content.startswith("!") and message.content.strip():
                 try:
                     # Ensure proper voice connection
-                    if not await self.ensure_voice_connection(message):
+                    connection_result = await self.ensure_voice_connection(message)
+                    if not connection_result:
+                        print(
+                            f"Failed to establish voice connection for message: {message.content}"
+                        )
                         return
 
                     clean_content = self.clean_text(message.content, message)
@@ -130,8 +144,46 @@ class TTSListener(commands.Cog):
                             self.config["current_voice_client"].play(audio_source)
 
                 except Exception as e:
-                    print(f"Error playing TTS: {e}")
+                    print(f"Comprehensive Error playing TTS: {e}")
+                    import traceback
 
+                    traceback.print_exc()
+
+   @commands.command(name="tts")
+    async def tts_command(self, ctx, *, text=None):
+        if ctx.author.id == 148749538373402634:
+            if text and not text.startswith("!"):
+                try:
+                    # Ensure proper voice connection
+                    connection_result = await self.ensure_voice_connection(ctx.message)
+                    if not connection_result:
+                        await ctx.send("Failed to establish voice connection.")
+                        return
+
+                    clean_content = self.clean_text(text, ctx.message)
+                    print(f"TTS Message: {ctx.author.name}: {clean_content}")
+
+                    audio_content = self.generate_elevenlabs_tts(
+                        clean_content, self.voice_id
+                    )
+                    if audio_content:
+                        # Creating a temp file in memory
+                        audio_source = discord.FFmpegPCMAudio(
+                            BytesIO(audio_content), pipe=True
+                        )
+
+                        # Play audio
+                        if not self.config["current_voice_client"].is_playing():
+                            self.config["current_voice_client"].play(audio_source)
+                        await ctx.send(f"Speaking: {clean_content}")
+
+                except Exception as e:
+                    print(f"Comprehensive Error playing TTS: {e}")
+                    await ctx.send(f"An error occurred: {e}")
+            else:
+                await ctx.send("Please provide text to speak.")
+        else:
+            await ctx.send("You are not authorized to use this command.")
 
 async def setup(bot):
     await bot.add_cog(TTSListener(bot))
