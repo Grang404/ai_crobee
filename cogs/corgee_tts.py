@@ -149,7 +149,7 @@ class TTSListener(commands.Cog):
 
                     traceback.print_exc()
 
-   @commands.command(name="tts")
+    @commands.command(name="tts")
     async def tts_command(self, ctx, *, text=None):
         if ctx.author.id == 148749538373402634:
             if text and not text.startswith("!"):
@@ -157,7 +157,9 @@ class TTSListener(commands.Cog):
                     # Ensure proper voice connection
                     connection_result = await self.ensure_voice_connection(ctx.message)
                     if not connection_result:
-                        await ctx.send("Failed to establish voice connection.")
+                        print(
+                            f"Failed to establish voice connection for message: {text}"
+                        )
                         return
 
                     clean_content = self.clean_text(text, ctx.message)
@@ -175,15 +177,13 @@ class TTSListener(commands.Cog):
                         # Play audio
                         if not self.config["current_voice_client"].is_playing():
                             self.config["current_voice_client"].play(audio_source)
-                        await ctx.send(f"Speaking: {clean_content}")
 
                 except Exception as e:
                     print(f"Comprehensive Error playing TTS: {e}")
-                    await ctx.send(f"An error occurred: {e}")
-            else:
-                await ctx.send("Please provide text to speak.")
-        else:
-            await ctx.send("You are not authorized to use this command.")
+                    import traceback
+
+                    traceback.print_exc()
+
 
 async def setup(bot):
     await bot.add_cog(TTSListener(bot))
