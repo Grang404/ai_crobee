@@ -30,9 +30,13 @@ class TTSListener(commands.Cog):
         return text
 
     def clean_text(self, text, message):
+        """Clean text by removing mentions, URLs, and custom emotes"""
         text = self.convert_mentions_to_names(text, message)
         text_without_urls = re.sub(r"https?://\S+", "", text)
-        return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        if "<a:cat_stare:999561526899900446>" in text_without_urls:
+            return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        else:
+            return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
 
     def generate_elevenlabs_tts(self, text, voice_id):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
