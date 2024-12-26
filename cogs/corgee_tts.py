@@ -37,7 +37,10 @@ class AzureTTSListener(commands.Cog):
         """Clean text by removing mentions, URLs, and custom emotes"""
         text = self.convert_mentions_to_names(text, message)
         text_without_urls = re.sub(r"https?://\S+", "", text)
-        return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        if "<a:cat_stare:999561526899900446>" in text_without_urls:
+            return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        else:
+            return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
 
     def generate_azure_tts(self, text):
         """Generate Azure Text-to-Speech audio"""
