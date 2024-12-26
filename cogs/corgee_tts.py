@@ -17,6 +17,7 @@ class TTSListener(commands.Cog):
         self.elevenlabs_key = os.getenv("API_KEY")
 
     def convert_mentions_to_names(self, text, message):
+        """Convert Discord mentions to display names"""
         for mention in message.mentions:
             text = text.replace(f"<@{mention.id}>", mention.display_name)
             text = text.replace(f"<@!{mention.id}>", mention.display_name)
@@ -28,6 +29,15 @@ class TTSListener(commands.Cog):
             text = text.replace(f"<#{channel.id}>", f"#{channel.name}")
 
         return text
+
+    def clean_text(self, text, message):
+        """Clean text by removing mentions, URLs, and custom emotes"""
+        text = self.convert_mentions_to_names(text, message)
+        text_without_urls = re.sub(r"https?://\S+", "", text)
+        if "<a:cat_stare:999561526899900446>" in text_without_urls: # Don't need this unless using Azure but oh well
+            return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        else:
+            return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
 
     def clean_text(self, text, message):
         text = self.convert_mentions_to_names(text, message)
