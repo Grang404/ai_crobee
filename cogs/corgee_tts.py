@@ -3,18 +3,28 @@ from discord.ext import commands
 import os
 import re
 from io import BytesIO
-import requests
+import pyttsx3
+import tempfile
+import subprocess
 
 
 class TTSListener(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = {
-            "target_user_id": 343414109213294594,
+            "target_user_id": 148749538373402634,
             "current_voice_client": None,
         }
-        self.voice_id = "0dPqNXnhg2bmxQv1WKDp"
-        self.elevenlabs_key = os.getenv("API_KEY")
+        # Initialize pyttsx3
+        self.engine = pyttsx3.init()
+        # Configure voice settings
+        self.engine.setProperty("rate", 175)  # Speed of speech
+        self.engine.setProperty("volume", 1.0)  # Volume level
+
+        # Get available voices and set to first one
+        voices = self.engine.getProperty("voices")
+        if voices:
+            self.engine.setProperty("voice", voices[0].id)
 
     def convert_mentions_to_names(self, text, message):
         for mention in message.mentions:
@@ -38,25 +48,44 @@ class TTSListener(commands.Cog):
         else:
             return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
 
-    def generate_elevenlabs_tts(self, text, voice_id):
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-        headers = {
-            "Content-Type": "application/json",
-            "xi-api-key": self.elevenlabs_key,
-        }
-        payload = {
-            "text": text,
-            "model_id": "eleven_monolingual_v1",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
-        }
+    def generate_tts_audio(self, text):
+        """Generate TTS audio using pyttsx3 and return WAV file"""
+        try:
+            # Initialize pyttsx3 engine
+            engine = pyttsx3.init()
 
-        response = requests.post(url, json=payload, headers=headers)
+            # Check available voices
+            voices = engine.getProperty("voices")
+            if not voices:
+                print("No voices available")
+                return None
+            print(f"Available voices: {[voice.name for voice in voices]}")
 
-        if response.status_code == 200:
-            return response.content
-        else:
-            print(f"TTS Generation Error: {response.text}")
-            return False
+            # Select a voice (optional)
+            engine.setProperty(
+                "voice", voices[0].id
+            )  # Set to the first available voice
+
+            # Create a temporary WAV file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
+                wav_path = temp_wav.name
+                print(f"Temporary WAV path: {wav_path}")
+
+                # Generate the WAV file using pyttsx3
+                engine.save_to_file(text, wav_path)
+                engine.runAndWait()
+
+            # Check if the file is empty
+            if os.path.getsize(wav_path) == 0:
+                print("Generated WAV file is empty!")
+                return None
+
+            print(f"Generated WAV file successfully at: {wav_path}")
+            return wav_path
+
+        except Exception as e:
+            print(f"Error generating TTS audio: {e}")
+            return None
 
     async def ensure_voice_connection(self, message):
         """Ensure the bot is connected to the correct voice channel"""
@@ -101,10 +130,37 @@ class TTSListener(commands.Cog):
             self.config["current_voice_client"] = None
             await ctx.send("Left voice channel")
 
+    @commands.command()
+    async def voice_speed(self, ctx, speed: int):
+        """Change the speech rate (words per minute). Default is 175."""
+        if 50 <= speed <= 300:
+            self.engine.setProperty("rate", speed)
+            await ctx.send(f"Voice speed set to {speed}")
+        else:
+            await ctx.send("Speed must be between 50 and 300")
+
+    @commands.command()
+    async def list_voices(self, ctx):
+        """List available voices"""
+        voices = self.engine.getProperty("voices")
+        voice_list = [f"{i}: {voice.name}" for i, voice in enumerate(voices)]
+        await ctx.send("Available voices:\n" + "\n".join(voice_list))
+
+    @commands.command()
+    async def set_voice(self, ctx, voice_index: int):
+        """Set the voice by index"""
+        voices = self.engine.getProperty("voices")
+        if 0 <= voice_index < len(voices):
+            self.engine.setProperty("voice", voices[voice_index].id)
+            await ctx.send(f"Voice set to: {voices[voice_index].name}")
+        else:
+            await ctx.send(
+                "Invalid voice index. Use !list_voices to see available voices."
+            )
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice state changes"""
-        # Only care about the target user completely leaving voice
         if (
             member.id == self.config["target_user_id"]
             and before.channel
@@ -117,6 +173,7 @@ class TTSListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        """Handle incoming messages for the target user"""
         if (
             self.config["target_user_id"]
             and message.author.id == self.config["target_user_id"]
@@ -134,53 +191,23 @@ class TTSListener(commands.Cog):
                     clean_content = self.clean_text(message.content, message)
                     print(f"TTS Message: {message.author.name}: {clean_content}")
 
-                    audio_content = self.generate_elevenlabs_tts(
-                        clean_content, self.voice_id
-                    )
-                    if audio_content:
-                        # Creating a temp file in memory
-                        audio_source = discord.FFmpegPCMAudio(
-                            BytesIO(audio_content), pipe=True
-                        )
+                    # Generate TTS to a temporary file
+                    audio_file = self.generate_tts_audio(clean_content)
+
+                    if audio_file:
+                        # Create FFmpeg audio source from the file
+                        audio_source = discord.FFmpegPCMAudio(audio_file)
 
                         # Play audio
                         if not self.config["current_voice_client"].is_playing():
-                            self.config["current_voice_client"].play(audio_source)
-
-                except Exception as e:
-                    print(f"Comprehensive Error playing TTS: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-
-    @commands.command(name="tts")
-    async def tts_command(self, ctx, *, text=None):
-        if ctx.author.id == 148749538373402634:
-            if text and not text.startswith("!"):
-                try:
-                    # Ensure proper voice connection
-                    connection_result = await self.ensure_voice_connection(ctx.message)
-                    if not connection_result:
-                        print(
-                            f"Failed to establish voice connection for message: {text}"
-                        )
-                        return
-
-                    clean_content = self.clean_text(text, ctx.message)
-                    print(f"TTS Message: {ctx.author.name}: {clean_content}")
-
-                    audio_content = self.generate_elevenlabs_tts(
-                        clean_content, self.voice_id
-                    )
-                    if audio_content:
-                        # Creating a temp file in memory
-                        audio_source = discord.FFmpegPCMAudio(
-                            BytesIO(audio_content), pipe=True
-                        )
-
-                        # Play audio
-                        if not self.config["current_voice_client"].is_playing():
-                            self.config["current_voice_client"].play(audio_source)
+                            self.config["current_voice_client"].play(
+                                audio_source,
+                                after=lambda e: (
+                                    os.unlink(audio_file)
+                                    if os.path.exists(audio_file)
+                                    else None
+                                ),
+                            )
 
                 except Exception as e:
                     print(f"Comprehensive Error playing TTS: {e}")
