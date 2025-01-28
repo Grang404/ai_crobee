@@ -3,7 +3,6 @@ from discord.ext import commands
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 bot_key = os.getenv("BOT_KEY")
 
@@ -16,10 +15,12 @@ intents.voice_states = True
 # Create bot instance
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user.name}")
+    if bot.user:
+        print(f"Logged in as {bot.user.name}")
+    else:
+        print(f"Bot is not available.")
 
     # Dynamically load all cogs
     for filename in os.listdir("./cogs"):
@@ -28,4 +29,7 @@ async def on_ready():
 
 
 # Run the bot
-bot.run(bot_key)
+if bot_key is not None:
+    bot.run(bot_key)
+else:
+    print("Bot cooked!")
