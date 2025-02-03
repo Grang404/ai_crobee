@@ -39,11 +39,6 @@ class TTSListener(commands.Cog):
         else:
             return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
 
-    def clean_text(self, text, message):
-        text = self.convert_mentions_to_names(text, message)
-        text_without_urls = re.sub(r"https?://\S+", "", text)
-        return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
-
     def generate_elevenlabs_tts(self, text, voice_id):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {
