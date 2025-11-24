@@ -45,7 +45,7 @@ class ZomboidServer(commands.Cog):
         except Exception as e:
             return None, str(e)
 
-    @commands.command(name="restart")
+    @commands.command(name="restart-server")
     @is_allowed_user()
     async def restart_server(self, ctx):
         await ctx.send("🔄 Restarting Zomboid server...")
@@ -55,7 +55,7 @@ class ZomboidServer(commands.Cog):
         else:
             await ctx.send("✅ Server restart command sent successfully!")
 
-    @commands.command(name="start")
+    @commands.command(name="start-server")
     @is_allowed_user()
     async def start_server(self, ctx):
         await ctx.send("🚀 Starting Zomboid server...")
@@ -65,7 +65,7 @@ class ZomboidServer(commands.Cog):
         else:
             await ctx.send("✅ Server start command sent successfully!")
 
-    @commands.command(name="stop")
+    @commands.command(name="stop-server")
     @is_allowed_user()
     async def stop_server(self, ctx):
         await ctx.send("⏹️ Stopping Zomboid server...")
