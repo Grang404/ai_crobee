@@ -97,140 +97,28 @@ class TTSListener(commands.Cog):
                 self.config["current_voice_client"] = None
                 self._last_disconnect = asyncio.get_event_loop().time()
 
-    async def connect_with_retry(self, channel, max_retries=3):
-        """Connect to voice channel with retry logic for 4006 errors"""
-        for attempt in range(max_retries):
+    async def connect_direct(self, channel, retries=3, delay=2):
+        for _ in range(retries):
             try:
-                print(
-                    f"Attempting to connect to {channel.name} (attempt {attempt + 1})"
-                )
-
-                # Add a small delay before each attempt to avoid rapid reconnections
-                if attempt > 0:
-                    await asyncio.sleep(min(2 ** (attempt - 1), 10))
-
-                voice_client = await asyncio.wait_for(channel.connect(), timeout=30.0)
-                print(f"Successfully connected to {channel.name}")
-
-                # Verify connection is actually stable
-                await asyncio.sleep(0.5)  # Brief pause to let connection stabilize
-                if voice_client.is_connected():
-                    return voice_client
-                else:
-                    print("Connection appeared successful but client is not connected")
-                    continue
-
-            except asyncio.TimeoutError:
-                print(f"Connection timeout on attempt {attempt + 1}")
-                if attempt == max_retries - 1:
-                    raise Exception("Connection timed out after all retry attempts")
-
-            except ConnectionClosed as e:
-                print(f"ConnectionClosed error (attempt {attempt + 1}): Code {e.code}")
-                if e.code == 4006:  # Session no longer valid
-                    print("Session invalid, will retry...")
-                    # Force a longer delay for 4006 errors
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(3 + attempt * 2)
-                elif e.code in [4014, 4015]:  # Disconnected or voice server crashed
-                    print("Voice server issue, will retry...")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 + attempt)
-                else:
-                    print(f"Unhandled connection close code: {e.code}")
-                    if attempt == max_retries - 1:
-                        raise
-
-            except discord.errors.ClientException as e:
-                if "already connected to a voice channel" in str(e).lower():
-                    print("Already connected error, cleaning up...")
-                    # Try to clean up any existing connections
-                    if self.config["current_voice_client"]:
-                        try:
-                            await self.config["current_voice_client"].disconnect()
-                        except:
-                            pass
-                        self.config["current_voice_client"] = None
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(1)
-                        continue
-                else:
-                    print(f"ClientException on attempt {attempt + 1}: {e}")
-                    if attempt == max_retries - 1:
-                        raise
-
-            except Exception as e:
-                print(
-                    f"Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}"
-                )
-                if attempt == max_retries - 1:
-                    raise
-
-        raise Exception(
-            f"Failed to connect to {channel.name} after {max_retries} attempts"
-        )
+                return await channel.connect()
+            except Exception:
+                await asyncio.sleep(delay)
+        raise RuntimeError("Voice connect failed after retries")
 
     async def ensure_voice_connection(self, message):
-        """Ensure the bot is connected to the correct voice channel with improved error handling"""
         if not message.author.voice:
-            print("Author not in a voice channel")
             return False
 
-        now = asyncio.get_event_loop().time()
-        if now - getattr(self, "_last_disconnect", 0) < 5:
-            await asyncio.sleep(5)
         target_channel = message.author.voice.channel
+        vc = self.config.get("current_voice_client")
 
-        try:
-            # Check if we have a valid connection to the right channel
-            if (
-                self.config["current_voice_client"]
-                and self.config["current_voice_client"].is_connected()
-                and self.config["current_voice_client"].channel == target_channel
-            ):
-                # Double-check the connection is actually working
-                try:
-                    # Test the connection by checking if we can access channel info
-                    _ = self.config["current_voice_client"].channel.name
-                    return True
-                except:
-                    print("Connection appears invalid, reconnecting...")
-                    await self.safe_disconnect()
-
-            # If we're connected to a different channel, disconnect first
-            if (
-                self.config["current_voice_client"]
-                and self.config["current_voice_client"].is_connected()
-                and self.config["current_voice_client"].channel != target_channel
-            ):
-                print(
-                    f'Moving from {self.config["current_voice_client"].channel.name} to {target_channel.name}'
-                )
-                await self.safe_disconnect()
-                # Add a brief delay after disconnect
-                await asyncio.sleep(1)
-
-            # Clean up any existing connection that's not working
-            if (
-                self.config["current_voice_client"]
-                and not self.config["current_voice_client"].is_connected()
-            ):
-                await self.safe_disconnect()
-
-            # Connect with retry logic
-            self.config["current_voice_client"] = await self.connect_with_retry(
-                target_channel
-            )
-            return True
-
-        except ConnectionClosed as e:
-            print(f"Voice connection failed with ConnectionClosed: {e.code} - {e}")
+        if vc and vc.is_connected():
+            if vc.channel == target_channel:
+                return True
             await self.safe_disconnect()
-            return False
-        except Exception as e:
-            print(f"Voice connection error: {type(e).__name__}: {e}")
-            await self.safe_disconnect()
-            return False
+
+        self.config["current_voice_client"] = await self.connect_direct(target_channel)
+        return True
 
     @commands.command()
     async def set_target(self, ctx, user: discord.Member):
