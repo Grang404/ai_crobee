@@ -49,7 +49,7 @@ class TTSListener(commands.Cog):
         }
         payload = {
             "text": text,
-            "model_id": "eleven_monolingual_v1",
+            "model_id": "eleven_multilingual_v2",
             "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
         }
 
@@ -62,7 +62,6 @@ class TTSListener(commands.Cog):
             return False
 
     async def safe_disconnect(self):
-        """Safely disconnect from voice channel"""
         if self.config["current_voice_client"]:
             try:
                 if self.config["current_voice_client"].is_connected():
@@ -71,20 +70,23 @@ class TTSListener(commands.Cog):
                 print(f"Error during disconnect: {e}")
             finally:
                 self.config["current_voice_client"] = None
+                self._last_disconnect = asyncio.get_event_loop().time()
 
     async def connect_with_retry(self, channel, max_retries=3):
         """Connect to voice channel with retry logic for 4006 errors"""
         for attempt in range(max_retries):
             try:
-                print(f"Attempting to connect to {channel.name} (attempt {attempt + 1})")
-                
+                print(
+                    f"Attempting to connect to {channel.name} (attempt {attempt + 1})"
+                )
+
                 # Add a small delay before each attempt to avoid rapid reconnections
                 if attempt > 0:
                     await asyncio.sleep(min(2 ** (attempt - 1), 10))
-                
+
                 voice_client = await asyncio.wait_for(channel.connect(), timeout=30.0)
                 print(f"Successfully connected to {channel.name}")
-                
+
                 # Verify connection is actually stable
                 await asyncio.sleep(0.5)  # Brief pause to let connection stabilize
                 if voice_client.is_connected():
@@ -92,12 +94,12 @@ class TTSListener(commands.Cog):
                 else:
                     print("Connection appeared successful but client is not connected")
                     continue
-                    
+
             except asyncio.TimeoutError:
                 print(f"Connection timeout on attempt {attempt + 1}")
                 if attempt == max_retries - 1:
                     raise Exception("Connection timed out after all retry attempts")
-                    
+
             except ConnectionClosed as e:
                 print(f"ConnectionClosed error (attempt {attempt + 1}): Code {e.code}")
                 if e.code == 4006:  # Session no longer valid
@@ -113,7 +115,7 @@ class TTSListener(commands.Cog):
                     print(f"Unhandled connection close code: {e.code}")
                     if attempt == max_retries - 1:
                         raise
-                        
+
             except discord.errors.ClientException as e:
                 if "already connected to a voice channel" in str(e).lower():
                     print("Already connected error, cleaning up...")
@@ -131,13 +133,17 @@ class TTSListener(commands.Cog):
                     print(f"ClientException on attempt {attempt + 1}: {e}")
                     if attempt == max_retries - 1:
                         raise
-                        
+
             except Exception as e:
-                print(f"Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}")
+                print(
+                    f"Unexpected error on attempt {attempt + 1}: {type(e).__name__}: {e}"
+                )
                 if attempt == max_retries - 1:
                     raise
-        
-        raise Exception(f"Failed to connect to {channel.name} after {max_retries} attempts")
+
+        raise Exception(
+            f"Failed to connect to {channel.name} after {max_retries} attempts"
+        )
 
     async def ensure_voice_connection(self, message):
         """Ensure the bot is connected to the correct voice channel with improved error handling"""
@@ -145,13 +151,18 @@ class TTSListener(commands.Cog):
             print("Author not in a voice channel")
             return False
 
+        now = asyncio.get_event_loop().time()
+        if now - getattr(self, "_last_disconnect", 0) < 5:
+            await asyncio.sleep(5)
         target_channel = message.author.voice.channel
 
         try:
             # Check if we have a valid connection to the right channel
-            if (self.config["current_voice_client"] and 
-                self.config["current_voice_client"].is_connected() and
-                self.config["current_voice_client"].channel == target_channel):
+            if (
+                self.config["current_voice_client"]
+                and self.config["current_voice_client"].is_connected()
+                and self.config["current_voice_client"].channel == target_channel
+            ):
                 # Double-check the connection is actually working
                 try:
                     # Test the connection by checking if we can access channel info
@@ -162,20 +173,29 @@ class TTSListener(commands.Cog):
                     await self.safe_disconnect()
 
             # If we're connected to a different channel, disconnect first
-            if (self.config["current_voice_client"] and 
-                self.config["current_voice_client"].is_connected() and
-                self.config["current_voice_client"].channel != target_channel):
-                print(f"Moving from {self.config['current_voice_client'].channel.name} to {target_channel.name}")
+            if (
+                self.config["current_voice_client"]
+                and self.config["current_voice_client"].is_connected()
+                and self.config["current_voice_client"].channel != target_channel
+            ):
+                print(
+                    f"Moving from {self.config['current_voice_client'].channel.name} to {target_channel.name}"
+                )
                 await self.safe_disconnect()
                 # Add a brief delay after disconnect
                 await asyncio.sleep(1)
 
             # Clean up any existing connection that's not working
-            if self.config["current_voice_client"] and not self.config["current_voice_client"].is_connected():
+            if (
+                self.config["current_voice_client"]
+                and not self.config["current_voice_client"].is_connected()
+            ):
                 await self.safe_disconnect()
 
             # Connect with retry logic
-            self.config["current_voice_client"] = await self.connect_with_retry(target_channel)
+            self.config["current_voice_client"] = await self.connect_with_retry(
+                target_channel
+            )
             return True
 
         except ConnectionClosed as e:
@@ -208,25 +228,30 @@ class TTSListener(commands.Cog):
         ):
             await self.safe_disconnect()
             print(f"Disconnected because {member.name} left voice")
-        
+
         # Also handle if the bot gets disconnected
-        if (member == self.bot.user and 
-            before.channel and 
-            not after.channel and 
-            self.config["current_voice_client"]):
+        if (
+            member == self.bot.user
+            and before.channel
+            and not after.channel
+            and self.config["current_voice_client"]
+        ):
             print("Bot was disconnected from voice channel")
             self.config["current_voice_client"] = None
 
-    @commands.Cog.listener() 
+    @commands.Cog.listener()
     async def on_error(self, event, *args, **kwargs):
         """Global error handler for connection issues"""
         import traceback
+
         error_info = traceback.format_exc()
-        
+
         if "4006" in error_info or "ConnectionClosed" in error_info:
-            print(f"Caught ConnectionClosed error in {event}: cleaning up voice connection")
+            print(
+                f"Caught ConnectionClosed error in {event}: cleaning up voice connection"
+            )
             await self.safe_disconnect()
-        
+
         print(f"Error in {event}: {error_info}")
 
     async def play_tts_audio(self, clean_content, message_author):
@@ -238,8 +263,10 @@ class TTSListener(commands.Cog):
                 return False
 
             # Check if voice client is still valid before playing
-            if not (self.config["current_voice_client"] and 
-                   self.config["current_voice_client"].is_connected()):
+            if not (
+                self.config["current_voice_client"]
+                and self.config["current_voice_client"].is_connected()
+            ):
                 print("Voice client disconnected before playing audio")
                 return False
 
@@ -257,6 +284,7 @@ class TTSListener(commands.Cog):
         except Exception as e:
             print(f"Error playing TTS audio: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -270,7 +298,9 @@ class TTSListener(commands.Cog):
                 # Ensure proper voice connection
                 connection_result = await self.ensure_voice_connection(message)
                 if not connection_result:
-                    print(f"Failed to establish voice connection for message: {message.content}")
+                    print(
+                        f"Failed to establish voice connection for message: {message.content}"
+                    )
                     return
 
                 clean_content = self.clean_text(message.content, message)
