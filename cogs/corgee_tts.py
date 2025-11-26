@@ -64,7 +64,7 @@ class TTSListener(commands.Cog):
         text = emoji_pattern.sub(r"", text)
         text = re.sub(r"\s+", " ", text).strip()
 
-        return text if text else None
+        return text if text else ""
 
     def generate_elevenlabs_tts(self, text, voice_id):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -83,7 +83,7 @@ class TTSListener(commands.Cog):
         if response.status_code == 200:
             return response.content
         else:
-            print(f"TTS Generation Error: {response.text}")
+            print(f"TTS Generation Error: {response.status_code}::{response.text}")
             return False
 
     async def safe_disconnect(self):
@@ -197,9 +197,11 @@ class TTSListener(commands.Cog):
                         f"Failed to establish voice connection for message: {message.content}"
                     )
                     return
+
                 clean_content = self.clean_text(message.content, message)
-                print(f"{message.author.name}: {clean_content}")
-                await self.play_tts_audio(clean_content)
+                if clean_content:
+                    print(f"{message.author.name}: {clean_content}")
+                    await self.play_tts_audio(clean_content)
 
 
 async def setup(bot):
