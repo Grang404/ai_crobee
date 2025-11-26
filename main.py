@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timezone
 
 load_dotenv()
 bot_key = os.getenv("BOT_KEY")
@@ -12,6 +13,7 @@ intents.members = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.start_time = datetime.now(timezone.utc)
 
 
 @bot.event
@@ -31,7 +33,7 @@ async def on_ready():
         ):
             await bot.load_extension(f"cogs.{filename[:-3]}")
 
-    guild = discord.Object(id=1131971185819799712)
+    guild = discord.Object(id=1083925119631642624)
     bot.tree.copy_global_to(guild=guild)
     await bot.tree.sync(guild=guild)
     print("Commands synced")
