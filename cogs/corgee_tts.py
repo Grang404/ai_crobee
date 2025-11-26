@@ -1,12 +1,13 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 import os
 import re
 from io import BytesIO
 import requests
 import asyncio
-from discord.errors import ConnectionClosed
+
+# TODO: Add message queue for TTS?
+# TODO: Add systemd logging
 
 
 class TTSListener(commands.Cog):
@@ -61,7 +62,6 @@ class TTSListener(commands.Cog):
         )
 
         text = emoji_pattern.sub(r"", text)
-
         text = re.sub(r"\s+", " ", text).strip()
 
         return text if text else None
@@ -120,6 +120,38 @@ class TTSListener(commands.Cog):
         self.config["current_voice_client"] = await self.connect_direct(target_channel)
         return True
 
+    async def play_tts_audio(self, clean_content):
+        """Play TTS audio"""
+        try:
+            vc = self.config.get("current_voice_client")
+            if not vc or not vc.is_connected():
+                print("Voice client not connected, skipping TTS generation")
+                return False
+
+            # Already have a valid VC, generate TTS
+            audio_content = self.generate_elevenlabs_tts(clean_content, self.voice_id)
+            if not audio_content:
+                print("TTS generation failed")
+                return False
+
+            # Create audio source
+            audio_source = discord.FFmpegPCMAudio(BytesIO(audio_content), pipe=True)
+
+            # Play audio if not already playing
+            if not vc.is_playing():
+                vc.play(audio_source)
+                return True
+            else:
+                print("Audio is already playing, skipping")
+                return False
+
+        except Exception as e:
+            print(f"Error playing TTS audio: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return False
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice state changes"""
@@ -152,63 +184,22 @@ class TTSListener(commands.Cog):
         print(traceback.format_exc())
         await self.safe_disconnect()
 
-    async def play_tts_audio(self, clean_content):
-        """Play TTS audio with error handling"""
-        try:
-            audio_content = self.generate_elevenlabs_tts(clean_content, self.voice_id)
-            if not audio_content:
-                print("Failed to generate TTS audio")
-                return False
-
-            # Check if voice client is still valid before playing
-            if not (
-                self.config["current_voice_client"]
-                and self.config["current_voice_client"].is_connected()
-            ):
-                print("Voice client disconnected before playing audio")
-                return False
-
-            # Create audio source
-            audio_source = discord.FFmpegPCMAudio(BytesIO(audio_content), pipe=True)
-
-            # Play audio if not already playing
-            if not self.config["current_voice_client"].is_playing():
-                self.config["current_voice_client"].play(audio_source)
-                return True
-            else:
-                print("Audio is already playing, skipping")
-                return False
-
-        except Exception as e:
-            print(f"Error playing TTS audio: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return False
-
     @commands.Cog.listener()
     async def on_message(self, message):
-        print("Received message.\nChecking ID...")
         if (
             self.config["target_user_id"]
             and message.author.id == self.config["target_user_id"]
         ):
-            print("ID check passed.")
-            print("Checking message not command...")
             if not message.content.startswith("!") and message.content.strip():
-                print("Message valid.")
                 connection_result = await self.ensure_voice_connection(message)
                 if not connection_result:
                     print(
                         f"Failed to establish voice connection for message: {message.content}"
                     )
                     return
-                print("Processing message into speech...")
-                print(f"Message: {message.content}")
                 clean_content = self.clean_text(message.content, message)
                 print(f"{message.author.name}: {clean_content}")
                 await self.play_tts_audio(clean_content)
-                print("Speech finished.")
 
 
 async def setup(bot):
