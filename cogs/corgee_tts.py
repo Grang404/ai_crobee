@@ -21,32 +21,50 @@ class TTSListener(commands.Cog):
         self.elevenlabs_key = os.getenv("API_KEY")
 
     def clean_text(self, text, message):
-        """Convert Discord mentions to display names"""
+        """Sanitise message content for TTS"""
+
+        # Convert Discord mentions to readable names
         for mention in message.mentions:
             text = text.replace(f"<@{mention.id}>", mention.display_name)
             text = text.replace(f"<@!{mention.id}>", mention.display_name)
+
         for role in message.role_mentions:
             text = text.replace(f"<@&{role.id}>", role.name)
+
         for channel in message.channel_mentions:
             text = text.replace(f"<#{channel.id}>", f"#{channel.name}")
 
-        # Replace @ with "at", adding spaces as needed
-        # Check if there's a non-space character before @
-        text = re.sub(r"(\S)@", r"\1 at ", text)
-        # Check if there's a non-space character after @ (and @ wasn't already replaced)
-        text = re.sub(r"@(\S)", r"at \1", text)
-        # Handle standalone @ (surrounded by spaces or at edges)
-        text = text.replace("@", "at")
-        # Convert markdown links [text](url) to just text
+        # Convert markdown links [text](url) to just text (vencord emojis lmao)
         text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+
         # Remove URLs
         text = re.sub(r"https?://\S+", "", text)
-        text = re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text).strip()
 
-        if not text:
-            return None
+        # Replace custom emotes with their names
+        text = re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text)
 
-        return text
+        # Replace @ with "at", adding spaces as needed
+        text = re.sub(r"(\S)@", r"\1 at ", text)  # character before @
+        text = re.sub(r"@(\S)", r"at \1", text)  # character after @
+        text = text.replace("@", "at")  # standalone @
+
+        emoji_pattern = re.compile(
+            "["
+            "\U0001f600-\U0001f64f"  # emoticons
+            "\U0001f300-\U0001f5ff"  # symbols & pictographs
+            "\U0001f680-\U0001f6ff"  # transport & map symbols
+            "\U0001f1e0-\U0001f1ff"  # flags (iOS)
+            "\U00002702-\U000027b0"
+            "\U000024c2-\U0001f251"
+            "]+",
+            flags=re.UNICODE,
+        )
+
+        text = emoji_pattern.sub(r"", text)
+
+        text = re.sub(r"\s+", " ", text).strip()
+
+        return text if text else None
 
     def generate_elevenlabs_tts(self, text, voice_id):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
