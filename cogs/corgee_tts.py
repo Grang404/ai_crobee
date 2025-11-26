@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import os
 import re
@@ -12,10 +13,10 @@ class TTSListener(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = {
-            "target_user_id": 343414109213294594,
+            "target_user_id": os.getenv("TARGET_USER"),
             "current_voice_client": None,
         }
-        self.voice_id = "0dPqNXnhg2bmxQv1WKDp"
+        self.voice_id = os.getenv("VOICE_ID")
         self.elevenlabs_key = os.getenv("API_KEY")
 
     def convert_mentions_to_names(self, text, message):
@@ -288,6 +289,16 @@ class TTSListener(commands.Cog):
             traceback.print_exc()
             return False
 
+    @app_commands.command(name="ping", description="Check bot latency")
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            f"Pong! {round(self.bot.latency * 1000)}ms"
+        )
+
+    @app_commands.command(name="say", description="Make the bot say something")
+    async def say(self, interaction: discord.Interaction, message: str):
+        await interaction.response.send_message(message)
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if (
@@ -295,7 +306,6 @@ class TTSListener(commands.Cog):
             and message.author.id == self.config["target_user_id"]
         ):
             if not message.content.startswith("!") and message.content.strip():
-                # Ensure proper voice connection
                 connection_result = await self.ensure_voice_connection(message)
                 if not connection_result:
                     print(
@@ -307,21 +317,6 @@ class TTSListener(commands.Cog):
                 print(f"TTS Message: {message.author.name}: {clean_content}")
 
                 await self.play_tts_audio(clean_content, message.author)
-
-    @commands.command(name="tts")
-    async def tts_command(self, ctx, *, text=None):
-        if ctx.author.id == 148749538373402634:
-            if text and not text.startswith("!"):
-                # Ensure proper voice connection
-                connection_result = await self.ensure_voice_connection(ctx.message)
-                if not connection_result:
-                    print(f"Failed to establish voice connection for message: {text}")
-                    return
-
-                clean_content = self.clean_text(text, ctx.message)
-                print(f"TTS Message: {ctx.author.name}: {clean_content}")
-
-                await self.play_tts_audio(clean_content, ctx.author)
 
 
 async def setup(bot):
