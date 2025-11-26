@@ -24,7 +24,11 @@ async def on_ready():
 
     # Load all cogs
     for filename in os.listdir("./cogs"):
-        if filename.endswith(".py") and filename != "__init__.py":
+        if (
+            filename.endswith(".py")
+            and not filename.startswith("_")
+            and filename != "__init__.py"
+        ):
             await bot.load_extension(f"cogs.{filename[:-3]}")
 
     guild = discord.Object(id=1131971185819799712)

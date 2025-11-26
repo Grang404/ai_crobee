@@ -120,19 +120,10 @@ class TTSListener(commands.Cog):
         self.config["current_voice_client"] = await self.connect_direct(target_channel)
         return True
 
-    @commands.command()
-    async def set_target(self, ctx, user: discord.Member):
-        self.config["target_user_id"] = user.id
-        await ctx.send(f"Now listening for messages from {user.name}")
-
-    @commands.command()
-    async def leave(self, ctx):
-        await self.safe_disconnect()
-        await ctx.send("Left voice channel")
-
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """Handle voice state changes"""
+
         # Only care about the target user completely leaving voice
         if (
             member.id == self.config["target_user_id"]
@@ -142,7 +133,7 @@ class TTSListener(commands.Cog):
             await self.safe_disconnect()
             print(f"Disconnected because {member.name} left voice")
 
-        # Also handle if the bot gets disconnected
+        # Handle if the bot gets disconnected
         if (
             member == self.bot.user
             and before.channel
@@ -157,17 +148,11 @@ class TTSListener(commands.Cog):
         """Global error handler for connection issues"""
         import traceback
 
-        error_info = traceback.format_exc()
+        print(f"Error in event {event} with args {args} and kwargs {kwargs}")
+        print(traceback.format_exc())
+        await self.safe_disconnect()
 
-        if "4006" in error_info or "ConnectionClosed" in error_info:
-            print(
-                f"Caught ConnectionClosed error in {event}: cleaning up voice connection"
-            )
-            await self.safe_disconnect()
-
-        print(f"Error in {event}: {error_info}")
-
-    async def play_tts_audio(self, clean_content, message_author):
+    async def play_tts_audio(self, clean_content):
         """Play TTS audio with error handling"""
         try:
             audio_content = self.generate_elevenlabs_tts(clean_content, self.voice_id)
@@ -201,16 +186,6 @@ class TTSListener(commands.Cog):
             traceback.print_exc()
             return False
 
-    @app_commands.command(name="ping", description="Check bot latency")
-    async def ping(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            f"Pong! {round(self.bot.latency * 1000)}ms"
-        )
-
-    @app_commands.command(name="say", description="Make the bot say something")
-    async def say(self, interaction: discord.Interaction, message: str):
-        await interaction.response.send_message(message)
-
     @commands.Cog.listener()
     async def on_message(self, message):
         print("Received message.\nChecking ID...")
@@ -232,7 +207,7 @@ class TTSListener(commands.Cog):
                 print(f"Message: {message.content}")
                 clean_content = self.clean_text(message.content, message)
                 print(f"{message.author.name}: {clean_content}")
-                await self.play_tts_audio(clean_content, message.author)
+                await self.play_tts_audio(clean_content)
                 print("Speech finished.")
 
 
