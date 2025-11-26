@@ -39,7 +39,7 @@ async def on_ready():
         try:
             await bot.reload_extension(f"cogs.{extension}")
             await ctx.send(f"✅ Reloaded {extension}")
-        except Exception as e:
+        except commands.CommandError as e:
             await ctx.send(f"❌ Error: {e}")
 
 

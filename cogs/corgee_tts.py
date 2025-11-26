@@ -12,35 +12,41 @@ from discord.errors import ConnectionClosed
 class TTSListener(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        target_user = os.getenv("TARGET_USER")
         self.config = {
-            "target_user_id": os.getenv("TARGET_USER"),
+            "target_user_id": int(target_user) if target_user else None,
             "current_voice_client": None,
         }
         self.voice_id = os.getenv("VOICE_ID")
         self.elevenlabs_key = os.getenv("API_KEY")
 
-    def convert_mentions_to_names(self, text, message):
+    def clean_text(self, text, message):
         """Convert Discord mentions to display names"""
         for mention in message.mentions:
             text = text.replace(f"<@{mention.id}>", mention.display_name)
             text = text.replace(f"<@!{mention.id}>", mention.display_name)
-
         for role in message.role_mentions:
             text = text.replace(f"<@&{role.id}>", role.name)
-
         for channel in message.channel_mentions:
             text = text.replace(f"<#{channel.id}>", f"#{channel.name}")
 
-        return text
+        # Replace @ with "at", adding spaces as needed
+        # Check if there's a non-space character before @
+        text = re.sub(r"(\S)@", r"\1 at ", text)
+        # Check if there's a non-space character after @ (and @ wasn't already replaced)
+        text = re.sub(r"@(\S)", r"at \1", text)
+        # Handle standalone @ (surrounded by spaces or at edges)
+        text = text.replace("@", "at")
+        # Convert markdown links [text](url) to just text
+        text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+        # Remove URLs
+        text = re.sub(r"https?://\S+", "", text)
+        text = re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text).strip()
 
-    def clean_text(self, text, message):
-        """Clean text by removing mentions, URLs, and custom emotes"""
-        text = self.convert_mentions_to_names(text, message)
-        text_without_urls = re.sub(r"https?://\S+", "", text)
-        if "<a:cat_stare:999561526899900446>" in text_without_urls:
-            return re.sub(r"<:([^:]+):\d+>", r"\1", text_without_urls).strip()
-        else:
-            return re.sub(r"<[a]?:([^:]+):\d+>", r"\1", text_without_urls).strip()
+        if not text:
+            return None
+
+        return text
 
     def generate_elevenlabs_tts(self, text, voice_id):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
@@ -180,7 +186,7 @@ class TTSListener(commands.Cog):
                 and self.config["current_voice_client"].channel != target_channel
             ):
                 print(
-                    f"Moving from {self.config['current_voice_client'].channel.name} to {target_channel.name}"
+                    f'Moving from {self.config["current_voice_client"].channel.name} to {target_channel.name}'
                 )
                 await self.safe_disconnect()
                 # Add a brief delay after disconnect
@@ -301,22 +307,27 @@ class TTSListener(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        print("Received message.\nChecking ID...")
         if (
             self.config["target_user_id"]
             and message.author.id == self.config["target_user_id"]
         ):
+            print("ID check passed.")
+            print("Checking message not command...")
             if not message.content.startswith("!") and message.content.strip():
+                print("Message valid.")
                 connection_result = await self.ensure_voice_connection(message)
                 if not connection_result:
                     print(
                         f"Failed to establish voice connection for message: {message.content}"
                     )
                     return
-
+                print("Processing message into speech...")
+                print(f"Message: {message.content}")
                 clean_content = self.clean_text(message.content, message)
-                print(f"TTS Message: {message.author.name}: {clean_content}")
-
+                print(f"{message.author.name}: {clean_content}")
                 await self.play_tts_audio(clean_content, message.author)
+                print("Speech finished.")
 
 
 async def setup(bot):
