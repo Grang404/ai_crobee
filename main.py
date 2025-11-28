@@ -36,9 +36,9 @@ async def on_ready():
         ):
             await bot.load_extension(f"cogs.{filename[:-3]}")
 
-    target_server = os.getenv("TARGET_KEY")
+    target_server = os.getenv("TARGET_SERVER")
     if target_server is None:
-        raise ValueError("TARGET_KEY environment variable not set!")
+        raise ValueError("TARGET_SERVER environment variable not set!")
     guild = discord.Object(id=int(target_server))
 
     bot.tree.copy_global_to(guild=guild)
