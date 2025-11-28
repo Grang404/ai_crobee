@@ -22,7 +22,7 @@ class ConfirmRestartView(discord.ui.View):
         )
         # Perform restart
         await self.bot.close()
-        os.execv(sys.executable, ["python"] + sys.argv)
+        os.system("systemctl restart cyborgee.service")
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
