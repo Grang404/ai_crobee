@@ -1,6 +1,36 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import sys
+import os
+
+
+class ConfirmRestartView(discord.ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=30)
+        self.bot = bot
+        self.value = None
+
+    @discord.ui.button(label="Yes, Restart", style=discord.ButtonStyle.danger)
+    async def confirm(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        self.value = True
+        self.stop()
+        await interaction.response.edit_message(
+            content="[+] Restarting bot...", view=None
+        )
+        # Perform restart
+        await self.bot.close()
+        os.execv(sys.executable, ["python"] + sys.argv)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
+        await interaction.response.edit_message(
+            content="[!] Restart cancelled.", view=None
+        )
 
 
 class TTSCommands(commands.Cog):
@@ -8,7 +38,6 @@ class TTSCommands(commands.Cog):
         self.bot = bot
 
     def get_tts_listener(self):
-        """Helper to get the TTSListener cog"""
         return self.bot.get_cog("TTSListener")
 
     @app_commands.command(
@@ -153,6 +182,44 @@ class TTSCommands(commands.Cog):
         )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="tts_restart", description="Restart the bot")
+    async def restart(self, interaction: discord.Interaction):
+        """Restart the bot (Admin only)"""
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "[!] This command can only be used in a server!", ephemeral=True
+            )
+            return
+
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.response.send_message(
+                "[!] Could not verify member status!", ephemeral=True
+            )
+            return
+
+        # Check if user has Administrator permission OR has a role named "Bot Admin"
+        has_permission = member.guild_permissions.administrator
+        has_bot_admin_role = any(role.name == "Bot Admin" for role in member.roles)
+
+        if not (has_permission or has_bot_admin_role):
+            await interaction.response.send_message(
+                "[!] You need Administrator permission or the 'Bot Admin' role to use this command!",
+                ephemeral=True,
+            )
+            return
+
+        # Create confirmation view
+        view = ConfirmRestartView(self.bot)
+        await interaction.response.send_message(
+            "⚠️ Are you sure you want to restart the bot?",
+            view=view,
+            ephemeral=True,
+        )
+
+        # Wait for user response
+        await view.wait()
 
 
 async def setup(bot):

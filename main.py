@@ -36,7 +36,11 @@ async def on_ready():
         ):
             await bot.load_extension(f"cogs.{filename[:-3]}")
 
-    guild = discord.Object(id=1083925119631642624)
+    target_server = os.getenv("TARGET_KEY")
+    if target_server is None:
+        raise ValueError("TARGET_KEY environment variable not set!")
+    guild = discord.Object(id=int(target_server))
+
     bot.tree.copy_global_to(guild=guild)
     await bot.tree.sync(guild=guild)
     print("Commands synced")
@@ -47,9 +51,9 @@ async def on_ready():
         """Reload a cog without restarting the bot"""
         try:
             await bot.reload_extension(f"cogs.{extension}")
-            await ctx.send(f"✅ Reloaded {extension}")
+            await ctx.send(f"Reloaded {extension}")
         except commands.CommandError as e:
-            await ctx.send(f"❌ Error: {e}")
+            await ctx.send(f"Error: {e}")
 
 
 if bot_key is None:
