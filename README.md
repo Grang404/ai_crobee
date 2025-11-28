@@ -24,7 +24,7 @@ NOTE: `/tts_restart` only restarts a systemd service
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.8 - 3.12
 - FFmpeg installed on your system
 - Discord Bot Token
 - ElevenLabs API Key
