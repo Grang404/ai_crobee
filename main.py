@@ -13,15 +13,18 @@ intents.members = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-bot.start_time = datetime.now(timezone.utc)
+bot.start_time = datetime.now(timezone.utc)  # type: ignore[attr-defined]
 
 
 @bot.event
 async def on_ready():
+    if bot.user is None:
+        print("Error: bot user is none")
+        return
+
     print(f"Logged in as {bot.user.name}")
 
     app_info = await bot.application_info()
-    bot.owner_id = app_info.owner.id
     print(f"Owner: {app_info.owner}")
 
     # Load all cogs
@@ -48,5 +51,8 @@ async def on_ready():
         except commands.CommandError as e:
             await ctx.send(f"❌ Error: {e}")
 
+
+if bot_key is None:
+    raise ValueError("BOT_KEY environment variable is not set")
 
 bot.run(bot_key)
