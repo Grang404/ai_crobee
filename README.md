@@ -39,7 +39,7 @@ cd <repo-name>
 
 2. Install dependencies:
 ```bash
-pip install discord.py python-dotenv requests psutil
+pip install -r requirements.txt
 ```
 
 3. Create a `.env` file in the root directory:
