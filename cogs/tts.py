@@ -74,8 +74,13 @@ class TTSListener(commands.Cog):
         }
         payload = {
             "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
+            "model_id": "eleven_flash_v2",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.5,
+                "style": 0.5,
+                "use_speaker_boost": True,
+            },
         }
 
         response = requests.post(url, json=payload, headers=headers)

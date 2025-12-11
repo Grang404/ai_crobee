@@ -218,7 +218,6 @@ class TTSCommands(commands.Cog):
             ephemeral=True,
         )
 
-        # Wait for user response
         await view.wait()
 
 
