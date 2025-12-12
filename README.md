@@ -2,8 +2,6 @@
 
 A personal Discord bot that automatically reads messages for one user aloud in a voice channel using ElevenLabs API.
 
-- The bot requires the Message Content intent to read messages
-
 ## Commands
 
 - `/tts_join` - Manually join your current voice channel
